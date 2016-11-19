@@ -39,7 +39,7 @@ english help
 -h | --help: get help document
 
 
-example
+example (例子)
 ======================
 
 >excel2json -s "D:\exceltojson\data\test_exc el_process.xlsx" -o "D:\output"
