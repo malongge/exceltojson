@@ -108,8 +108,8 @@
       <file leaf-file-name="excel2json.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/exceltojson/excel2json.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="234">
-              <caret line="70" column="23" selection-start-line="70" selection-start-column="23" selection-end-line="70" selection-end-column="23" />
+            <state relative-caret-position="162">
+              <caret line="66" column="21" selection-start-line="66" selection-start-column="21" selection-end-line="66" selection-end-column="21" />
               <folding>
                 <element signature="e#117#156#0" expanded="true" />
               </folding>
@@ -695,7 +695,14 @@
       <option name="project" value="LOCAL" />
       <updated>1479533575881</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="2.7版本兼容问题">
+      <created>1479533841197</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1479533841197</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="TestHistory">
@@ -775,7 +782,8 @@
     <MESSAGE value="添加安装包信息" />
     <MESSAGE value="python2 测试用例中文编码问题" />
     <MESSAGE value="修改 readme" />
-    <option name="LAST_COMMIT_MESSAGE" value="修改 readme" />
+    <MESSAGE value="2.7版本兼容问题" />
+    <option name="LAST_COMMIT_MESSAGE" value="2.7版本兼容问题" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager />
@@ -1037,6 +1045,7 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="226">
           <caret line="720" column="8" selection-start-line="720" selection-start-column="8" selection-end-line="720" selection-end-column="8" />
+          <folding />
         </state>
       </provider>
     </entry>
@@ -1132,8 +1141,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/exceltojson/excel2json.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="234">
-          <caret line="70" column="23" selection-start-line="70" selection-start-column="23" selection-end-line="70" selection-end-column="23" />
+        <state relative-caret-position="162">
+          <caret line="66" column="21" selection-start-line="66" selection-start-column="21" selection-end-line="66" selection-end-column="21" />
           <folding>
             <element signature="e#117#156#0" expanded="true" />
           </folding>

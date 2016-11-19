@@ -12,11 +12,16 @@ from xlrd.xldate import xldate_as_datetime
 from xlrd import XL_CELL_DATE
 from six import itervalues
 from six.moves import range as _range
-from six import string_types
+from six import PY2
 from exceltojson.utils import get_sheets, get_sheet_names
 
 import os
 import sys
+
+if PY2:
+    str = unicode
+else:
+    str = str
 
 # for compatible python2 and python3 open function, then use open function like py3 style
 if sys.version_info[0] > 2:
@@ -65,7 +70,7 @@ class _RowProcess(object):
             if cell.ctype is XL_CELL_DATE:
                 row_dict[key] = xldate_as_datetime(cell.value, self.date_mode).strftime('%Y/%m/%d')
             else:
-                row_dict[key] = string_types(cell.value).strip()
+                row_dict[key] = str(cell.value).strip()
         if self._check_state(row_dict):
             return
         return row_dict
