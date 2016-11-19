@@ -1,0 +1,12 @@
+language: python
+
+python:
+  - "3.5"
+  - "3.4"
+  - "2.7"
+
+# command to install dependencies
+install: "pip install -Ur requirements-devel.txt"
+
+# command to run tests, e.g. python setup.py test
+script: py.test tests

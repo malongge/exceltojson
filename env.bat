@@ -1,0 +1,1 @@
+call "d:\venv\exceltojson\Scripts\activate.bat"
