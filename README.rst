@@ -1,6 +1,7 @@
 .. image:: https://travis-ci.org/malongge/exceltojson.svg?branch=master
     :target: https://travis-ci.org/malongge/exceltojson
 
+
 中文帮助文档
 =======================
 
@@ -37,6 +38,11 @@ english help
 ====================
 
 -h | --help: get help document
+
+
+install
+=============
+pip install excel2json
 
 
 example (例子)
