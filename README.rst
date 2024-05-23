@@ -45,7 +45,7 @@ install
 pip install excel2json
 
 
-example (例子)
+windows example (例子)
 ======================
 
 >excel2json -s "D:\exceltojson\data\test_exc el_process.xlsx" -o "D:\output"
