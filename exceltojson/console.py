@@ -23,7 +23,7 @@ def usage():
 note: -a and (-i or -n) must in pairs
 """)
 
-
+# 执行入口，需要解析参数
 def main():
     try:
         opts, args = getopt.getopt(
