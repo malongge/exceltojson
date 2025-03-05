@@ -18,6 +18,20 @@ from exceltojson.utils import get_sheets, get_sheet_names
 import os
 import sys
 
+# 添加最大文件大小限制（100MB）
+MAX_FILE_SIZE = 100 * 1024 * 1024
+
+def check_file_size(file_path):
+    """检查文件大小是否超过限制"""
+    if os.path.getsize(file_path) > MAX_FILE_SIZE:
+        raise ValueError(f'File size exceeds maximum limit of {MAX_FILE_SIZE/1024/1024}MB')
+
+def validate_cell_value(value):
+    """验证单元格值是否安全"""
+    if isinstance(value, str) and len(value) > 1000000:  # 限制单个单元格最大长度
+        raise ValueError('Cell value too large')
+    return value
+
 if PY2:
     str = unicode
 else:
@@ -70,7 +84,8 @@ class _RowProcess(object):
             if cell.ctype is XL_CELL_DATE:
                 row_dict[key] = xldate_as_datetime(cell.value, self.date_mode).strftime('%Y/%m/%d')
             else:
-                row_dict[key] = str(cell.value).strip()
+                # 添加值验证
+                row_dict[key] = validate_cell_value(str(cell.value).strip())
         if self._check_state(row_dict):
             return
         return row_dict
@@ -231,6 +246,9 @@ class ProcessExcel(object):
         :return:
         """
 
+        # 添加文件大小检查
+        check_file_size(excel_path)
+        
         merge_cell = True if merge_cell else False
         self.show_row = show_row
         self.patch_sheet = patch_sheet_alias
