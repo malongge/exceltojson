@@ -4,10 +4,17 @@
 # Created by malongge on 2016/6/20
 #
 
-"""excel file to json file
+"""Excel file to JSON file converter with modern Python features
 """
-from __future__ import unicode_literals
+from __future__ import annotations
+
 import json
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Union, Any, Iterator, Tuple
+
+import xlrd
 from xlrd.xldate import xldate_as_datetime
 from xlrd import XL_CELL_DATE
 from six import itervalues
@@ -15,7 +22,6 @@ from six.moves import range as _range
 from six import PY2
 from exceltojson.utils import get_sheets, get_sheet_names
 
-import os
 import sys
 
 if PY2:
@@ -41,6 +47,181 @@ else:
         if opener is not None:
             warnings.warn('opener is not supported in py2')
         return codecs.open(filename=file, mode=mode, encoding=encoding, errors=errors, buffering=buffering)
+
+
+@dataclass
+class ExcelConfig:
+    """Configuration for Excel processing"""
+    merge_cell: bool = True
+    show_row: bool = True
+    max_row: int = 1000
+    date_mode: int = 0
+
+
+class ExcelProcessor:
+    """Modern Excel to JSON converter"""
+    
+    MAX_SCAN_ROWS = 500
+    MAX_SCAN_COLS = 1000
+
+    def __init__(
+        self,
+        excel_path: Union[str, Path],
+        save_path: Union[str, Path],
+        config: Optional[ExcelConfig] = None
+    ):
+        self.excel_path = Path(excel_path)
+        self.save_path = Path(save_path)
+        self.config = config or ExcelConfig()
+        
+        if not self.excel_path.exists():
+            raise FileNotFoundError(f'Excel file not found: {excel_path}')
+        if not self.save_path.exists():
+            raise FileNotFoundError(f'Save directory not found: {save_path}')
+
+    def process_cell(self, cell: Any) -> str:
+        """Process a single cell value"""
+        if cell.ctype is XL_CELL_DATE:
+            return xldate_as_datetime(
+                cell.value, 
+                self.config.date_mode
+            ).strftime('%Y/%m/%d')
+        return str(cell.value).strip()
+
+    def find_header_row(self, sheet: xlrd.sheet.Sheet) -> int:
+        """Find the first non-empty row that can be used as header"""
+        for row_idx in range(self.MAX_SCAN_ROWS):
+            if any(cell.value.strip() for cell in sheet.row(row_idx)):
+                return row_idx
+        raise ValueError(f'No header found in first {self.MAX_SCAN_ROWS} rows')
+
+    def get_headers(self, sheet: xlrd.sheet.Sheet, header_row: int) -> Tuple[int, List[str]]:
+        """Get column headers and starting column index"""
+        start_col = -1
+        headers = []
+        
+        # 首先找到第一个非空列
+        for col_idx in range(sheet.ncols):
+            value = str(sheet.cell(header_row, col_idx).value).strip()
+            if value and start_col == -1:
+                start_col = col_idx
+            if value:
+                headers.append(value)
+                
+        if start_col == -1:
+            raise ValueError('No headers found')
+        if len(set(headers)) != len(headers):
+            raise ValueError('Duplicate headers found')
+            
+        return start_col, headers
+
+    def process_row(
+        self, 
+        sheet: xlrd.sheet.Sheet, 
+        row_idx: int, 
+        headers: List[str], 
+        start_col: int,
+        previous_row: Optional[Dict[str, str]] = None
+    ) -> Optional[Dict[str, str]]:
+        """Process a single row of data"""
+        row_data = {}
+        
+        for col_idx, header in enumerate(headers):
+            cell = sheet.cell(row_idx, start_col + col_idx)
+            value = self.process_cell(cell)
+            
+            if not value and self.config.merge_cell and previous_row:
+                value = previous_row.get(header, '')
+            row_data[header] = value
+            
+        return row_data if any(row_data.values()) else None
+
+    def process_sheet(self, sheet: xlrd.sheet.Sheet) -> Iterator[Tuple[int, Dict[str, str]]]:
+        """Process a single sheet"""
+        header_row = self.find_header_row(sheet)
+        start_col, headers = self.get_headers(sheet, header_row)
+        
+        previous_row = None
+        for row_idx in range(header_row + 1, sheet.nrows):
+            row_data = self.process_row(
+                sheet, row_idx, headers, start_col, previous_row
+            )
+            if row_data:
+                previous_row = row_data.copy()
+                # 行号从1开始，header_row是0，所以实际行号是 row_idx - header_row
+                yield row_idx - header_row, row_data
+
+    def save_json(self, data: Union[Dict, List], filepath: Path) -> None:
+        """Save data to JSON file"""
+        with filepath.open('w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+    def process_workbook(self) -> None:
+        """Process the entire workbook"""
+        workbook = xlrd.open_workbook(str(self.excel_path))
+        
+        for sheet_idx in range(workbook.nsheets):
+            sheet = workbook.sheet_by_index(sheet_idx)
+            output_path = self.save_path / f'sheet-{sheet_idx}.json'
+            
+            container = [] if not self.config.show_row else {}
+            current_size = 0
+            
+            for row_num, row_data in self.process_sheet(sheet):
+                if self.config.show_row:
+                    container[row_num] = row_data
+                else:
+                    container.append(row_data)
+                    
+                current_size += 1
+                if current_size >= self.config.max_row:
+                    self.save_json(container, output_path)
+                    output_path = output_path.with_name(
+                        f'{output_path.stem}0{output_path.suffix}'
+                    )
+                    container = [] if not self.config.show_row else {}
+                    current_size = 0
+                    
+            if container:
+                self.save_json(container, output_path)
+
+
+def excel_to_json(
+    excel_path: Union[str, Path],
+    save_path: Union[str, Path],
+    config: Optional[ExcelConfig] = None
+) -> None:
+    """
+    Convert Excel file to JSON file(s).
+    
+    Args:
+        excel_path: Path to the Excel file
+        save_path: Directory to save JSON files
+        config: Optional configuration settings
+    """
+    processor = ExcelProcessor(excel_path, save_path, config)
+    processor.process_workbook()
+
+
+if __name__ == '__main__':
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Convert Excel files to JSON')
+    parser.add_argument('excel_path', help='Path to Excel file')
+    parser.add_argument('save_path', help='Directory to save JSON files')
+    parser.add_argument('--merge-cell', action='store_true', help='Merge empty cells with previous values')
+    parser.add_argument('--show-row', action='store_true', help='Include row numbers in output')
+    parser.add_argument('--max-row', type=int, default=1000, help='Maximum rows per JSON file')
+    
+    args = parser.parse_args()
+    
+    config = ExcelConfig(
+        merge_cell=args.merge_cell,
+        show_row=args.show_row,
+        max_row=args.max_row
+    )
+    
+    excel_to_json(args.excel_path, args.save_path, config)
 
 
 class _RowProcess(object):

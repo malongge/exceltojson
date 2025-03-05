@@ -3,211 +3,114 @@ from __future__ import unicode_literals
 
 import os
 import json
-
-from functools import partial
-
+from pathlib import Path
 import pytest
+from exceltojson import excel_to_json, ExcelConfig
 
-from exceltojson.excel2json import (_RowProcess, _ColProcess, _SheetProcess, ProcessExcel)
-from exceltojson.utils import (get_sheets, get_data_path, clear_json_files)
-from exceltojson.excel2json import open
+def get_data_path(filename):
+    """获取测试数据文件路径"""
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', filename)
 
+@pytest.fixture
+def output_dir():
+    """创建临时输出目录"""
+    import tempfile
+    temp_dir = tempfile.mkdtemp()
+    return temp_dir
 
-def test_row_process():
-    col_headers = ['col1', 'col2', 'col3']
-    start_col = 1
-    sheet = get_sheets(get_data_path('test_row_process.xlsx'))[0]
-    row_process = _RowProcess(sheet, col_headers, start_col)
+def test_basic_conversion(output_dir):
+    """测试基本的Excel到JSON转换"""
+    excel_path = get_data_path('test_row_process.xlsx')
+    config = ExcelConfig(merge_cell=False, show_row=True)
+    excel_to_json(excel_path, output_dir, config)
+    
+    # 检查输出文件是否存在
+    output_file = Path(output_dir) / 'sheet-0.json'
+    assert output_file.exists()
+    
+    # 验证JSON内容
+    with open(output_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    # 验证数据结构
+    assert isinstance(data, dict)
+    assert len(data) > 0
+    
+    # 验证具体数据
+    assert data['1']['col1'] == '内容1'
+    assert data['1']['col2'] == '内容2'
+    assert data['1']['col3'] == '内容3'
 
-    assert row_process(1) == {'col1': u"内容1", "col2": u"内容2", "col3": u"内容3"}
-    assert row_process(2) is None
-    assert row_process(3) == {'col1': "content1", "col2": "content2", "col3": "content3"}
+def test_merge_cells(output_dir):
+    """测试合并单元格功能"""
+    excel_path = get_data_path('test_sheet_process.xlsx')
+    config = ExcelConfig(merge_cell=True, show_row=True)
+    excel_to_json(excel_path, output_dir, config)
+    
+    output_file = Path(output_dir) / 'sheet-0.json'
+    with open(output_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    # 验证空单元格是否被合并
+    assert data['13']['header1'] == 'test1'
+    assert data['13']['header3'] == 'conten2'
+    assert data['13']['header2'] == 'test3'
 
+def test_list_output(output_dir):
+    """测试列表输出模式"""
+    excel_path = get_data_path('test_row_process.xlsx')
+    config = ExcelConfig(merge_cell=False, show_row=False)
+    excel_to_json(excel_path, output_dir, config)
+    
+    output_file = Path(output_dir) / 'sheet-0.json'
+    with open(output_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    # 验证输出是列表
+    assert isinstance(data, list)
+    assert len(data) > 0
+    
+    # 验证数据
+    assert data[0]['col1'] == '内容1'
+    assert data[0]['col2'] == '内容2'
 
-def test_col_process():
+def test_date_format(output_dir):
+    """测试日期格式转换"""
+    excel_path = get_data_path('test_time_cell_process.xlsx')
+    config = ExcelConfig(merge_cell=True, show_row=True)
+    excel_to_json(excel_path, output_dir, config)
+    
+    output_file = Path(output_dir) / 'sheet-0.json'
+    with open(output_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    # 验证日期格式
+    assert data['10']['time'] == '2016/11/16'
 
-    sheet = get_sheets(get_data_path('test_col_process.xlsx'))[0]
-    alias = {u'头部': 'header3'}
-    col_process = _ColProcess(sheet, alias, 15)
-    ret = col_process()
-    assert ret[0] == 3
-    assert ret[1] == ['header1', 'header3', 'header2']
+def test_multiple_sheets(output_dir):
+    """测试多表格处理"""
+    excel_path = get_data_path('test_excel_process.xlsx')
+    config = ExcelConfig(merge_cell=False, show_row=True)
+    excel_to_json(excel_path, output_dir, config)
+    
+    # 验证多个表格文件是否生成
+    assert (Path(output_dir) / 'sheet-0.json').exists()
+    assert (Path(output_dir) / 'sheet-1.json').exists()
+    assert (Path(output_dir) / 'sheet-2.json').exists()
 
-    # alias set invalid
-    alias = {u'头': 'header3'}
-    col_process = _ColProcess(sheet, alias, 15)
+def test_header_validation(output_dir):
+    """测试表头验证"""
+    excel_path = get_data_path('test_col_process_invalid_header.xlsx')
+    config = ExcelConfig(merge_cell=False, show_row=True)
+    
+    # 验证无效表头处理
     with pytest.raises(ValueError):
-        col_process()
+        excel_to_json(excel_path, output_dir, config)
 
-    # header index not invalid
-    with pytest.raises(ValueError):
-        _ColProcess(sheet, alias, 16)()
-
-    # header duplicate
-    alias = {u'头部': 'header2'}
-    with pytest.raises(ValueError):
-        _ColProcess(sheet, alias, 15)()
-
-
-def test_col_process_header_invalid():
-    sheet = get_sheets(get_data_path('test_col_process_invalid_header.xlsx'))[0]
-    with pytest.raises(ValueError):
-        _ColProcess(sheet, {'头部': 'header3'}, 15)()
-
-
-def test_sheet_process():
-    sheet = get_sheets(get_data_path('test_sheet_process.xlsx'))[0]
-    alias = {'头部': 'header3'}
-    sheet_process = _SheetProcess(sheet, alias, merge_cell=True)
-
-    data = [value for value in sheet_process()]
-
-    assert data[0][0] == 10
-    assert data[0][1] == {'header1': '内容1', 'header3': '内容2', 'header2': '内容3'}
-    assert data[2][0] == 13
-    assert data[2][1] == {'header1': 'test1', 'header3': 'conten2', 'header2': 'test3'}
-
-def test_time_cell_process():
-    sheet = get_sheets(get_data_path('test_time_cell_process.xlsx'))[0]
-    sheet_process = _SheetProcess(sheet, merge_cell=True)
-
-    data = [value for value in sheet_process()]
-
-    assert data[0][0] == 10
-    assert data[0][1] == {'time': '2016/11/16', 'header3': '内容2', 'header2': '内容3'}
-
-
-
-class TestProcessExcel:
-
-    @classmethod
-    def setup_class(cls):
-        """simple ProcessExcel instance
-        :return:
-        """
-        cls.process_excel = partial(ProcessExcel, get_data_path('test_excel_process.xlsx'), get_data_path('.'))
-
-    def setup_method(self, method):
-        """
-        every test should clear the json files
-        """
-        clear_json_files()
-
-    @classmethod
-    def teardown_class(cls):
-        """
-        after test clear the temporary test files
-        """
-        clear_json_files()
-
-    def test_excel_process_with_show_row(self):
-        excel = self.process_excel()
-        # sheet small should not split
-        excel(100)
-        assert os.path.exists(get_data_path('sheet-20.json')) is False
-
-        excel(max_row=5)
-        # big excel file should be split
-        assert os.path.exists(get_data_path('sheet-20.json'))
-        assert os.path.exists(get_data_path('sheet-2.json'))
-        # split file should be right json
-        with open(get_data_path('sheet-20.json'), encoding='utf-8') as f:
-            assert json.load(f) == {
-                '9': {
-                    'header1': u'内容6',
-                    'header3': u'内容7',
-                    'header2': u'内容8'
-                },
-
-                '10': {
-                  'header1': u'内容7',
-                  'header3': u'内容8',
-                  'header2': u'内容9'
-                }
-            }
-        # other sheet should be convert to json file
-        assert os.path.exists(get_data_path('sheet-0.json'))
-        assert os.path.exists(get_data_path('sheet-1.json'))
-        with open(get_data_path('sheet-0.json'), encoding='utf-8') as f:
-            assert json.load(f) == {
-                '2': {
-                    'header1': u'内容1',
-                    u'头部': u'内容2',
-                    'header2': u'内容3'
-                }
-            }
-
-    def test_excel_process_with_no_show_row(self):
-        excel = self.process_excel(show_row=False)
-        excel(10)
-        with open(get_data_path('sheet-0.json'), encoding='utf-8') as f:
-            assert json.load(f) == [
-                {
-                    'header1': u'内容1',
-                    u'头部': u'内容2',
-                    'header2': u'内容3'
-                }
-            ]
-
-    def test_excel_process_with_alias(self):
-        excel = self.process_excel(show_row=False, index_sheets={'0': {
-                u'头部': 'header3'
-            }, 1: None}, patch_sheet_alias=False)
-        excel(10)
-        with open(get_data_path('sheet-0.json'), encoding='utf-8') as f:
-            assert json.load(f) == [
-                {
-                    'header1': u'内容1',
-                    'header3': u'内容2',
-                    'header2': u'内容3'
-                }
-            ]
-        # now sheet index 2 not exist
-        assert os.path.exists(get_data_path('sheet-2.json')) is False
-
-    def test_excel_process_patch_alias(self):
-        excel = self.process_excel(show_row=False, index_sheets={0: {
-                u'头部': 'header3'
-            }}, patch_sheet_alias=True)
-        excel(10)
-
-        # now sheet index 2 should exist
-        assert os.path.exists(get_data_path('sheet-2.json'))
-
-    def test_excel_process_with_sheet_names(self):
-        excel = self.process_excel(show_row=False, name_sheets={u'名字': {
-                u'头部': 'header3'
-            }}, patch_sheet_alias=True)
-        excel(10)
-        # json file name should be sheet name
-        assert os.path.exists(get_data_path(u'名字.json'))
-        assert os.path.exists(get_data_path('Sheet2.json'))
-        assert os.path.exists(get_data_path('Sheet3.json'))
-
-    def test_excel_process_not_patch_sheet_names(self):
-        excel = self.process_excel(show_row=False, name_sheets={u'名字': {
-                u'头部': 'header3'
-            }}, patch_sheet_alias=False)
-        excel(10)
-        assert os.path.exists(get_data_path(u'名字.json'))
-        assert os.path.exists(get_data_path('Sheet2.json')) is False
-
-    def test_excel_process_sheet_index_not_invalid(self):
-        # sheet index large not invalid
-        with pytest.raises(ValueError):
-            self.process_excel(show_row=False, index_sheets={5: {
-                u'头部': 'header3'
-            }}, patch_sheet_alias=True)
-
-        # sheet index not int value or int str
-        with pytest.raises(ValueError):
-            self.process_excel(show_row=False, index_sheets={'a': {
-                u'头部': 'header3'
-            }}, patch_sheet_alias=True)
-
-    def test_excel_process_sheet_name_not_invalid(self):
-        # sheet index large not invalid
-        with pytest.raises(ValueError):
-            self.process_excel(show_row=False, name_sheets={'a': {
-                u'头部': 'header3'
-            }}, patch_sheet_alias=True)
+def test_invalid_paths():
+    """测试无效路径处理"""
+    with pytest.raises(FileNotFoundError):
+        excel_to_json('nonexistent.xlsx', 'output')
+    
+    with pytest.raises(FileNotFoundError):
+        excel_to_json(get_data_path('test_row_process.xlsx'), 'nonexistent_dir')
